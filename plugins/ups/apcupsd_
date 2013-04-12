@@ -1,0 +1,93 @@
+#!/usr/bin/perl
+# 
+# Plugin to monitor apcupsd
+# 
+# Contributed by Behan Webster <behanw@websterwood.com>
+#
+# Supports:
+#[apcupsd_ups1]
+#   env.netserver localhost:3552
+#   env.info List of machines on the UPS
+# 
+#%# family=auto
+#%# capabilities=autoconf
+
+my $apcaccess="/sbin/apcaccess";
+my $netserver = $ENV{'netserver'} || 'localhost:3551';
+
+if( $ARGV[0] eq 'autoconf' || $ARGV[0] eq 'detect' ) {
+	if( -f $apcaccess ) {
+		print "yes\n";
+		exit 0;
+	} else {
+		print "no (apcaccess not found)\n";
+		exit 1;
+	}
+}
+
+my %data;
+my %num;
+open( APCACCESS, "$apcaccess status \"$netserver\" |" ) || die "$apcaccess: $!\n";
+while( <APCACCESS> ) {
+	$data{$1} = $2 if /^(\S+)\s+:\s+(.+?)$/;
+	$num{$1} = $2 if /^(\S+)\s+:\s+(\S+)/;
+}
+close APCACCESS;
+
+#MODEL    : SMART-UPS 700
+#BCHARGE  : 100.0 Percent
+#LOADPCT  :  28.6 Percent Load Capacity
+#TIMELEFT :  17.0 Minutes
+#ITEMP    : 44.1 C Internal
+#LINEV    : 121.5 Volts
+#OUTPUTV  : 122.2 Volts
+#BATTV    : 27.7 Volts
+
+#MODEL    : BackUPS
+#LINEFAIL : OK
+#BATTSTAT : OK
+
+if( $ARGV[0] eq 'config' ) {
+	print "graph_title $data{MODEL}\n";
+	print "graph_args --lower-limit 0\n";
+	print "graph_width 425\n";
+	#print "graph_vlabel Units\n";
+	print "graph_category ups\n";
+	#print "graph_total Total\n";
+        if (defined($ENV{'info'})) {
+	  print "graph_info $ENV{'info'}\n";
+        }
+	print "battery.label Pct battery charge\n" if $data{BCHARGE};
+	print "upsload.label Pct load capacity\n" if $data{LOADPCT};
+	print "timeleft.label Run time minutes\n" if $data{TIMELEFT};
+	print "linevolts.label Line voltage\n" if $data{ITEMP};
+	print "batteryvolts.label Battery voltage\n" if $data{LINEV};
+	print "outputvolts.label Output voltage\n" if $data{OUTPUTV};
+	print "temperature.label UPS temperature\n" if $data{BATTV};
+	print "linefail.label Line voltage status\n" if $data{LINEFAIL};
+	print "battstat.label Battery status\n" if $data{BATTSTAT};
+	print "mains.label Mains\n" if $data{MAINS};
+	print "xfers.label Num Transfers\n" if defined($data{NUMXFERS});
+} else {
+	print "battery.value $num{BCHARGE}\n" if $data{BCHARGE};
+	print "upsload.value $num{LOADPCT}\n" if $data{LOADPCT};
+	print "timeleft.value $num{TIMELEFT}\n" if $data{TIMELEFT};
+	print "linevolts.value $num{ITEMP}\n" if $data{ITEMP};
+	print "batteryvolts.value $num{LINEV}\n" if $data{LINEV};
+	print "outputvolts.value $num{OUTPUTV}\n" if $data{OUTPUTV};
+	print "temperature.value $num{BATTV}\n" if $data{BATTV};
+	print "linefail.value ".quant($data{LINEFAIL})."\n" if $data{LINEFAIL};
+	print "battstat.value ".quant($data{BATTSTAT})."\n" if $data{BATTSTAT};
+	print "mains.value ".quant($data{MAINS})."\n" if $data{MAINS};
+	print "xfers.value $num{NUMXFERS}\n" if defined($data{NUMXFERS});
+}
+
+exit 0;
+
+sub quant {
+	my $status = shift;
+	return "1" if $status eq "OK";
+	return "0";
+}
+
+# vim: sw=4 ts=4
