@@ -1,0 +1,51 @@
+#!/usr/bin/perl -w
+# 
+# CyberPower UPS script.  Must be run as root
+#
+#%# family=auto
+#%# capabilities=autoconf
+
+my $pwrstat = '/usr/sbin/pwrstat';
+
+if( $ARGV[0] && ($ARGV[0] eq 'autoconf' || $ARGV[0] eq 'detect' )) {
+	if( -f $pwrstat ) {
+		print "yes\n";
+		exit 0;
+	} else {
+		print "no (pwrstat not found)\n";
+		exit 1;
+	}
+}
+
+my %data = ();
+my %labels = ();
+my %num = ();
+my $vals = '^(Util|Out|Batt|Load|Remain)';
+open( PWRSTAT, "$pwrstat -status |" ) || die "$pwrstat: $!\n";
+while(<PWRSTAT>) {
+    my ($label, $value) = (m/^\s*([\w ]+)\s*\.+\s+(.+?)$/);
+    if (!$label) { next; }
+    my $key = $label;
+    $key =~ s/ //g;
+    $labels{$key} = $label;
+    $data{$key} = $value;
+    if ($key =~ /$vals/ && $value =~ /^([\d\.]+)/) {
+        $num{$key} = $1;
+    }
+}
+close PWRSTAT;
+
+if( $ARGV[0] && $ARGV[0] eq 'config' ) {
+    print<<EOM;
+graph_title CyberPower $data{'ModelName'} $data{'RatingPower'}
+graph_category ups
+EOM
+    for my $key (sort(keys(%num))) {
+        print "${key}.label $labels{$key}\n";
+    }
+} else {
+    for my $key (sort(keys(%num))) {
+        print "${key}.value $num{$key}\n";
+    }
+}
+
