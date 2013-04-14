@@ -1,7 +1,12 @@
 #!/bin/sh
+#
+# [clamav]
+#   user clamav
+#
 #%# family=manual
 #%# capabilities=autoconf
-log=/var/log/clamav/clamd.log
+
+log=/var/log/clamav/clamav.log
 
 if [ "$1" = "autoconf" ]; then
         if [ -r $log ]; then 
@@ -17,15 +22,24 @@ if [ "$1" = "config" ]; then
 	cat <<EOT
 graph_title ClamAV stats
 graph_args --base 1000 -l 0 
-graph_vlabel virus/day
+graph_vlabel messages/day
 graph_category Mail
 virus.label virus
 virus.type DERIVE
 virus.min 0
-virus.draw AREA
+virus.draw STACK
 virus.cdef virus,86400,*
+virus.colour FF0000
+passed.label passed
+passed.type DERIVE
+passed.min 0
+passed.draw AREA
+passed.cdef passed,86400,*
 EOT
         exit 0
 fi
 
 echo -n "virus.value " && fgrep -c FOUND $log
+echo -n "passed.value " && fgrep -c ': OK' $log
+echo -n "virus.extinfo " && echo `fgrep FOUND $log|awk -F'[ (]+' '{print $8}'|sort -u`
+
